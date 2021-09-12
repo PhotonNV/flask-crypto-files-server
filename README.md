@@ -16,8 +16,6 @@
 
 6. Должно быть предусмотрено, что пользователь может получать ключ шифрования только для своих файлов. 
 
-https://dev-gang.ru/article/integracija-mongodb-s-python-s-ispolzovaniem-pymongo-9hmv4a77cw/
-https://pythonbasics.org/flask-mongodb/
 
 ###Регистрация нового пользователя
 Для регистрации нового пользователя необходимо отправить POST запрос к адресу

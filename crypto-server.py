@@ -3,6 +3,8 @@ from dotenv import load_dotenv
 from flask_pymongo import PyMongo
 from werkzeug.security import generate_password_hash, check_password_hash
 import os
+import io
+import re
 import uuid
 import jwt
 import datetime
@@ -18,6 +20,10 @@ SECRET_KEY = os.getenv('SECRET_KEY')
 app.config["MONGO_URI"] = 'mongodb://' + os.getenv('MONGO_HOST') +\
                           ':' + os.getenv('MONGO_PORT') + '/' + os.getenv('MONGO_DB')
 mongo = PyMongo(app)
+
+
+def chek_correct_file_id(file_id):
+    return re.match(r'\b[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12}\b', file_id)
 
 
 @app.route('/registration', methods=['POST'])
@@ -45,8 +51,8 @@ def login_user():
     current_user = mongo.db.users.find_one({'name': user_name})
     if current_user is not None and check_password_hash(current_user['password'], user_password):
         token = jwt.encode(
-            {'public_id': current_user['public_id'], 'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)},
-            SECRET_KEY)
+            {'public_id': current_user['public_id'],
+             'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)}, SECRET_KEY)
         return token.decode('UTF-8'), 200
 
     return 'Could not verify', 401
@@ -77,7 +83,39 @@ def token_required(f):
 @app.route('/test_login', methods=['GET'])
 @token_required
 def test_login(current_user):
-    return 'Login is OK, your name: '+ current_user['name'] + '\n', 200
+    return 'Login is OK, your name: ' + current_user['name'] + '\n', 200
+
+
+@app.route('/load', methods=['POST'])
+@token_required
+def load(current_user):
+    data = io.BytesIO(request.get_data(cache=False, as_text=False, parse_form_data=False))
+    file_id = str(uuid.uuid4())
+    mongo.save_file(filename=file_id, fileobj=data, user_save=current_user['name'], crypto_key=str(uuid.uuid4()))
+    return file_id, 200
+
+
+@app.route('/get_crypto_key/<file_id>', methods=['GET'])
+@token_required
+def get_crypto_key(current_user, file_id):
+    if not chek_correct_file_id(file_id):
+        return 'The request does not contain correct file ID \n', 400
+
+    get_file_info = mongo.db.fs.files.find_one({'user_save': current_user['name'], 'filename': file_id})
+    if get_file_info is None:
+        return 'No file with such a file ID was found \n', 404
+    return get_file_info['crypto_key'], 200
+
+
+@app.route('/download/<file_id>', methods=['GET'])
+@token_required
+def download(current_user, file_id):
+    if not chek_correct_file_id(file_id):
+        return 'The request does not contain correct file ID \n', 400
+
+    if mongo.db.fs.files.find_one({'filename': file_id}) is None:
+        return 'No file with such a file ID was found \n', 404
+    return mongo.send_file(filename=file_id)
 
 
 if __name__ == '__main__':
