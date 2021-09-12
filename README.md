@@ -64,3 +64,12 @@ curl -v -H "x-access-tokens:eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwdWJsaWNfaWQ
 ```bash
 curl -v -O -H "x-access-tokens:eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJwdWJsaWNfaWQiOiI1NDRjMzBhYy03N2ExLTQ4MmEtYmM2Yi1mZjg1NWMyZjAyZDMiLCJleHAiOjE2MzE0MTA3NzF9.o9lBJrjegl534kXse1jtFL6i3Ha-jlR66e-_JrwfLSA"  -X GET  localhost:5000/download/a13c2e20-cc33-4659-8112-9b484009d29e
 ```
+
+### Дешифровка файла
+Для проверки корректности полученного файла добавлен скрипт позволяющий 
+дешифровать полученный файл. Скрипт принимает на вход путь к файлу и ключ.
+Пример запуска скрипта:
+```bash
+python decrypt_file.py /path/to/file/62cf7f28-5c37-4a65-bc07-22de44992788 BRarbG31euS3kRtQ7Cs6Wu-QUWmpvR0kXXylLNTaCoM=
+```
+Полученный файл будет сохранён с префиксом '_decryp'
