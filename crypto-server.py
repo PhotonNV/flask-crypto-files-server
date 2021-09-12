@@ -9,6 +9,7 @@ import uuid
 import jwt
 import datetime
 from functools import wraps
+from cryptography.fernet import Fernet
 
 app = Flask(__name__)
 
@@ -16,7 +17,9 @@ load_dotenv()
 
 HOST = os.getenv('HOST')
 PORT = os.getenv('PORT')
+TOKEN_LIFE_MINUTES = int(os.getenv('TOKEN_LIFE_MINUTES'))
 SECRET_KEY = os.getenv('SECRET_KEY')
+
 app.config["MONGO_URI"] = 'mongodb://' + os.getenv('MONGO_HOST') +\
                           ':' + os.getenv('MONGO_PORT') + '/' + os.getenv('MONGO_DB')
 mongo = PyMongo(app)
@@ -52,7 +55,7 @@ def login_user():
     if current_user is not None and check_password_hash(current_user['password'], user_password):
         token = jwt.encode(
             {'public_id': current_user['public_id'],
-             'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=30)}, SECRET_KEY)
+             'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=TOKEN_LIFE_MINUTES)}, SECRET_KEY)
         return token.decode('UTF-8'), 200
 
     return 'Could not verify', 401
@@ -89,9 +92,14 @@ def test_login(current_user):
 @app.route('/load', methods=['POST'])
 @token_required
 def load(current_user):
-    data = io.BytesIO(request.get_data(cache=False, as_text=False, parse_form_data=False))
+    open_date = request.get_data(cache=False, as_text=False, parse_form_data=False)
+    cipher_key = Fernet.generate_key()
+    cipher = Fernet(cipher_key)
+    encrypted_data = cipher.encrypt(open_date)
+    fs_encrypted_data = io.BytesIO(encrypted_data)
     file_id = str(uuid.uuid4())
-    mongo.save_file(filename=file_id, fileobj=data, user_save=current_user['name'], crypto_key=str(uuid.uuid4()))
+    mongo.save_file(filename=file_id, fileobj=fs_encrypted_data, user_save=current_user['name'],
+                    crypto_key=cipher_key.decode())
     return file_id, 200
 
 
