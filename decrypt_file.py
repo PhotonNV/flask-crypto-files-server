@@ -11,6 +11,6 @@ with open(sys.argv[1], 'rb+') as inf:
 key = sys.argv[2]
 cipher = Fernet(key)
 decrypt_data = cipher.decrypt(crypt_data)
-with open(sys.argv[1] + '_decryp', 'wb+') as outf:
+with open(sys.argv[1] + '_decrypt', 'wb+') as outf:
     outf.write(decrypt_data)
 

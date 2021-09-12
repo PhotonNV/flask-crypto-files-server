@@ -1,15 +1,16 @@
-from flask import Flask, request
-from dotenv import load_dotenv
-from flask_pymongo import PyMongo
-from werkzeug.security import generate_password_hash, check_password_hash
 import os
 import io
 import re
 import uuid
 import jwt
 import datetime
-from functools import wraps
+from flask import Flask, request
 from cryptography.fernet import Fernet
+from flask_pymongo import PyMongo
+from dotenv import load_dotenv
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
+
 
 app = Flask(__name__)
 
@@ -25,31 +26,33 @@ app.config["MONGO_URI"] = 'mongodb://' + os.getenv('MONGO_HOST') +\
 mongo = PyMongo(app)
 
 
-def chek_correct_file_id(file_id):
+def check_correct_file_id(file_id):
     return re.match(r'\b[0-9a-f]{8}\b-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-\b[0-9a-f]{12}\b', file_id)
 
 
 @app.route('/registration', methods=['POST'])
 def registration():
     min_char_in_login_user = 5
-    new_user_name = request.headers.get('New_User_Name')
-    new_user_password = request.headers.get('New_User_Password')
+    data = request.get_json()
+    new_user_name = data.get('New_User_Name')
+    new_user_password = data.get('New_User_Password')
     if len(new_user_name) < min_char_in_login_user or len(new_user_password) < min_char_in_login_user:
-        return 'The length of the login and password must be more than ' + str(min_char_in_login_user)\
-               + ' characters \n', 400
+        return 'The length of the login and password must be more than {} characters\n'.format(min_char_in_login_user),\
+               400
     if mongo.db.users.find_one({'name': new_user_name}) is not None:
-        return 'User ' + new_user_name + ' exist!', 400
+        return 'User {} exist!\n'.format(new_user_name), 400
     hash_password = generate_password_hash(new_user_password, method='sha256')
     mongo.db.users.insert_one({'public_id': str(uuid.uuid4()), 'name': new_user_name, 'password': hash_password})
-    return 'Registration user ' + new_user_name + ' is done!', 200
+    return 'Registration user {} is done!\n'.format(new_user_name), 200
 
 
 @app.route('/login', methods=['GET'])
 def login_user():
-    user_name = request.headers.get('User_Name')
-    user_password = request.headers.get('User_Password')
+    data = request.get_json()
+    user_name = data.get('User_Name')
+    user_password = data.get('User_Password')
     if user_name is None or user_password is None:
-        return 'Not login or password', 401
+        return 'Not login or password\n', 401
 
     current_user = mongo.db.users.find_one({'name': user_name})
     if current_user is not None and check_password_hash(current_user['password'], user_password):
@@ -58,26 +61,22 @@ def login_user():
              'exp': datetime.datetime.utcnow() + datetime.timedelta(minutes=TOKEN_LIFE_MINUTES)}, SECRET_KEY)
         return token.decode('UTF-8'), 200
 
-    return 'Could not verify', 401
+    return 'Could not verify\n', 401
 
 
 def token_required(f):
     @wraps(f)
     def decorator(*args, **kwargs):
 
-        token = None
-        if 'x-access-tokens' in request.headers:
-            token = request.headers['x-access-tokens']
-
-        if not token:
-            return 'A valid token is missing', 400
+        token = request.headers.get('x-access-tokens')
+        if token is None:
+            return 'A valid token is missing\n', 400
 
         try:
             data = jwt.decode(token, SECRET_KEY)
             current_user = mongo.db.users.find_one({'public_id': data['public_id']})
-
         except:
-            return 'Token is invalid', 401
+            return 'Token is invalid\n', 401
 
         return f(current_user, *args, **kwargs)
     return decorator
@@ -86,7 +85,7 @@ def token_required(f):
 @app.route('/test_login', methods=['GET'])
 @token_required
 def test_login(current_user):
-    return 'Login is OK, your name: ' + current_user['name'] + '\n', 200
+    return 'Token is OK, your name: {} \n'.format(current_user['name']), 200
 
 
 @app.route('/load', methods=['POST'])
@@ -106,7 +105,7 @@ def load(current_user):
 @app.route('/get_crypto_key/<file_id>', methods=['GET'])
 @token_required
 def get_crypto_key(current_user, file_id):
-    if not chek_correct_file_id(file_id):
+    if not check_correct_file_id(file_id):
         return 'The request does not contain correct file ID \n', 400
 
     get_file_info = mongo.db.fs.files.find_one({'user_save': current_user['name'], 'filename': file_id})
@@ -118,7 +117,7 @@ def get_crypto_key(current_user, file_id):
 @app.route('/download/<file_id>', methods=['GET'])
 @token_required
 def download(current_user, file_id):
-    if not chek_correct_file_id(file_id):
+    if not check_correct_file_id(file_id):
         return 'The request does not contain correct file ID \n', 400
 
     if mongo.db.fs.files.find_one({'filename': file_id}) is None:
